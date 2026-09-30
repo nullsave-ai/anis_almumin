@@ -1,0 +1,76 @@
+name: Build Flutter APK
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Prepare Base Project and Build
+        run: |
+          flutter create --org app --project-name anis_almumin --platforms android ../base
+          cp -r android lib assets pubspec.yaml ../base/
+          
+          # Add native datastore and coroutines dependencies
+          if [ -f ../base/android/app/build.gradle.kts ]; then
+            printf '\ndependencies {\n    implementation("androidx.datastore:datastore-preferences:1.1.7")\n    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")\n}\n' >> ../base/android/app/build.gradle.kts
+          else
+            printf '\ndependencies {\n    implementation "androidx.datastore:datastore-preferences:1.1.7"\n    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0"\n}\n' >> ../base/android/app/build.gradle
+          fi
+
+          cd ../base
+          flutter pub get
+          # Build split-per-abi for small size (~15MB) and universal APK
+          flutter build apk --release --split-per-abi
+          flutter build apk --release
+
+          cd build/app/outputs/flutter-apk
+          cp app-arm64-v8a-release.apk anis_almumin-arm64.apk
+          cp app-armeabi-v7a-release.apk anis_almumin-arm32.apk
+          cp app-release.apk anis_almumin-universal.apk
+          ls -lh anis_almumin*.apk
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: anis_almumin_apks
+          path: ../base/build/app/outputs/flutter-apk/anis_almumin*.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: "Anis Al Mumin v1.0.${{ github.run_number }} (Optimized)"
+          body: |
+            ### اختر النسخة المناسبة لجهازك:
+            * **`anis_almumin-arm64.apk`** (~15MB): **النسخة الموصى بها لهاتفك (Tecno Camon 30) وللهواتف الحديثة**.
+            * **`anis_almumin-arm32.apk`** (~14MB): للأجهزة القديمة (32-bit).
+            * **`anis_almumin-universal.apk`**: النسخة الشاملة لجميع الأجهزة.
+          files: |
+            ../base/build/app/outputs/flutter-apk/anis_almumin-arm64.apk
+            ../base/build/app/outputs/flutter-apk/anis_almumin-arm32.apk
+            ../base/build/app/outputs/flutter-apk/anis_almumin-universal.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
