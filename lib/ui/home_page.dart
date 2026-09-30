@@ -2,7 +2,7 @@ import 'dart:ui' show FontFeature;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hijri/hijri_calendar.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/adhkar.dart';
 import '../core/prayer_calculator.dart';
